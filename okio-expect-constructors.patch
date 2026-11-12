@@ -1,0 +1,33 @@
+diff --git a/okio/src/commonMain/kotlin/okio/CommonPlatform.kt b/okio/src/commonMain/kotlin/okio/CommonPlatform.kt
+index dcbe198..db0fcf6 100644
+--- a/okio/src/commonMain/kotlin/okio/CommonPlatform.kt
++++ b/okio/src/commonMain/kotlin/okio/CommonPlatform.kt
+@@ -32,15 +32,24 @@ expect inline fun <T> Lock.withLock(action: () -> T): T
+ 
+ internal expect fun newLock(): Lock
+ 
+-expect open class IOException(message: String?, cause: Throwable?) : Exception {
+-  constructor(message: String? = null)
++expect open class IOException : Exception {
++  constructor(message: String?, cause: Throwable?)
++  constructor(message: String?)
++  constructor(cause: Throwable?)
++  constructor()
+ }
+ 
+ expect class ProtocolException(message: String) : IOException
+ 
+-expect open class EOFException(message: String? = null) : IOException
++expect open class EOFException : IOException {
++  constructor(message: String?)
++  constructor()
++}
+ 
+-expect class FileNotFoundException(message: String? = null) : IOException
++expect class FileNotFoundException : IOException {
++  constructor(message: String?)
++  constructor()
++}
+ 
+ expect interface Closeable {
+   /**
