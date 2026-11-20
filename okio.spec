@@ -1,17 +1,21 @@
 Name:		okio
-Version:	3.6.0
+Version:	3.18.2
 Release:	1
 Summary:	Modern I/O library for Java and Kotlin
 Group:		Development/Java
 License:	Apache-2.0
 URL:		https://github.com/square/okio
-# Square tag parent-3.6.0. The JVM jar is commonMain plus jvmMain.
-# kotlinc 2.0.21 rejects expect constructors that use default arguments
-# when the actual is a typealias, so those constructors are split into
-# overloads. IOException, EOFException, and FileNotFoundException stay
-# typealiases of the java.io classes.
+# Square tag parent-3.18.2. JVM jar is commonMain plus jvmMain and the
+# intermediate source sets jvm depends on: zlibMain, systemFileSystemMain,
+# nonJsMain. Expects in zlibMain and systemFileSystemMain are passed as
+# -Xcommon-sources with commonMain. nonJsMain supplies commonDecodeHex.
+# kotlinc 2.0.21 needs -opt-in=kotlin.contracts.ExperimentalContracts.
+# CRC32 is patched from internal actual typealias to a wrapper class because
+# the CLI rejects typealiasing an internal expect to a public Java class.
+# CommonPlatform already uses secondary constructors (no default-arg patch).
+# IOException/EOFException/FileNotFoundException stay typealiases of java.io.
 Source0:	okio-%{version}.tar.gz
-Patch0:		okio-expect-constructors.patch
+Patch0:		okio-crc32-actual.patch
 
 BuildArch:	noarch
 BuildRequires:	java-21-openjdk-devel
@@ -38,7 +42,8 @@ grep -F -q 'constructor()' okio/src/commonMain/kotlin/okio/CommonPlatform.kt
 if grep -F -q 'String? = null' okio/src/commonMain/kotlin/okio/CommonPlatform.kt; then
 	exit 1
 fi
-test "$(find okio/src/commonMain okio/src/jvmMain -name '*.kt' | wc -l)" -eq 77
+# commonMain + jvmMain + zlibMain + systemFileSystemMain + nonJsMain
+test "$(find okio/src/commonMain okio/src/jvmMain okio/src/zlibMain okio/src/systemFileSystemMain okio/src/nonJsMain -name '*.kt' | wc -l)" -eq 96
 
 %build
 set -eo pipefail
@@ -50,21 +55,26 @@ CPJDK8=%{_javadir}/kotlin-stdlib-jdk8.jar
 test -s "$CPSTD"
 test -s "$CPJDK7"
 test -s "$CPJDK8"
-find okio/src/commonMain -name '*.kt' > common.list
-find okio/src/commonMain okio/src/jvmMain -name '*.kt' > kt.list
-test "$(wc -l < kt.list)" -eq 77
+# Expect-bearing sets must be listed as common sources for multiplatform.
+find okio/src/commonMain okio/src/zlibMain okio/src/systemFileSystemMain -name '*.kt' > common.list
+find okio/src/commonMain okio/src/jvmMain okio/src/zlibMain okio/src/systemFileSystemMain okio/src/nonJsMain -name '*.kt' > kt.list
+test "$(wc -l < kt.list)" -eq 96
 common=$(paste -sd, common.list)
 mkdir -p classes
 kotlinc -J-Xmx2g -jvm-target 1.8 -language-version 1.9 -Xmulti-platform -Xexpect-actual-classes \
+	-opt-in=kotlin.contracts.ExperimentalContracts \
 	-Xcommon-sources="$common" \
 	-cp "$CPSTD:$CPJDK7:$CPJDK8" \
 	-d classes @kt.list
 test -s classes/okio/Buffer.class
 test -s classes/okio/ByteString.class
+test -s classes/okio/DeflaterSink.class
+test -s classes/okio/InflaterSource.class
+# IOException remains a typealias of java.io.IOException (no okio.IOException.class).
 if [ -e classes/okio/IOException.class ]; then
 	exit 1
 fi
-test "$(find classes -name '*.class' | wc -l)" -eq 107
+test "$(find classes -name '*.class' | wc -l)" -eq 129
 javap -v -classpath classes okio.Buffer | grep -F -q 'major version: 52'
 printf '%s\n' 'Manifest-Version: 1.0' 'Automatic-Module-Name: okio' "Implementation-Version: %{version}" > manifest.mf
 jar cfm okio.jar manifest.mf -C classes .

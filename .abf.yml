@@ -1,2 +1,4 @@
 sources:
+  okio-3.18.2.tar.gz: 79dc372fb61bbf7256dc6f3f4f6454e0b39d8beb
+removed_sources:
   okio-3.6.0.tar.gz: 9a846d75d223bb0034ab2f6de8160ea35a1ca852
